@@ -2,6 +2,7 @@
   "name": "multiplayer-quiz",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon app.ts",
@@ -15,6 +16,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "nodemon": "^3.1.10",
+    "redis": "^5.9.0",
     "socket.io": "^4.8.1",
     "ts-node": "^10.9.2"
   }
