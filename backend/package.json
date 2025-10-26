@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@perplexity-ai/perplexity_ai": "^0.12.0",
     "@types/express": "^5.0.4",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
