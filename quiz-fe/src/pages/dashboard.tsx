@@ -52,7 +52,7 @@ export function Dashboard() {
                 setNewRoomName("")
                 setShowCreateForm(false)
                 console.log("[v0] Room created:", newRoom)
-                navigate(`/room/${newRoom?.roomId}`)
+                navigate(`/room/${newRoom?.roomId}/${username}`)
             }
         }
     }catch(err){
