@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import dotenv from 'dotenv'
 import cors from 'cors'
 import appRouter from './routes/router'
-import { registerSocketHandlers } from './controller/socket/registerSocketHandlers';
+import { registerSocketHandlers } from './controller/socket/registerSocketHandlers.js';
 dotenv.config()
 
 
@@ -20,7 +20,11 @@ const io = new Server(server, {
     origin: '*', 
   },
 })
-io.on("connection", (socket) => registerSocketHandlers(io, socket));
+
+io.on("connection", (socket) => {
+  console.log("✅ User connected:", socket.id);
+  registerSocketHandlers(io, socket);
+});
 
 const port = process.env.PORT || 3000
 

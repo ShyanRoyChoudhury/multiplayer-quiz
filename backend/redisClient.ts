@@ -4,8 +4,8 @@ dotenv.config();
 
 
 const redisPort = process.env.REDIS_PORT as number | undefined
-const redisHost = process.env.REDIS_HOST 
-const redisPassword = process.env.REDIS_PASSWORD 
+const redisHost = process.env.REDIS_HOST  as string
+const redisPassword = process.env.REDIS_PASSWORD as string
 
 export const redisClient = createClient({
   socket: {

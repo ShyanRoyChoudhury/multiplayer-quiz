@@ -1,24 +1,25 @@
 import { randomUUID } from "crypto";
 import { Request, Response } from "express";
-import { redisClient } from "../../redisClient";
+import { redisClient } from "../../redisClient.js";
 
 async function createRoomHandler(req: Request, res: Response){
     try {
         const { username, roomName } = req.body;
         if (!username) {
-        return res.status(400).json({ message: "userId is required" });
+        return res.status(400).json({ message: "username is required" });
         }
 
         const roomId = randomUUID().slice(0, 6); // generate short room code
 
         // Store room metadata
-        await redisClient.hset(`room:${roomId}`, {
-            host: username,
-            createdAt: Date.now().toString(),
-        });
+        await redisClient.hSet(`room:${roomId}`, [
+            "host", username,
+            "createdAt", Date.now().toString(),
+            "roomName", roomName
+        ]);
 
-        // Add user to room user list
-        await redisClient.sadd(`room:${roomId}:users`, username);
+        await redisClient.sAdd(`room:${roomId}:users`, username);
+
 
         console.log(`Room created: ${roomId} by ${username}`);
 
