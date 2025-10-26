@@ -7,30 +7,6 @@ import { Input } from "@/components/ui/input"
 import { socket } from "@/socket"
 import { useParams } from "react-router-dom"
 
-interface Question {
-  id: number
-  text: string
-  category: string
-}
-
-const SAMPLE_QUESTIONS: Question[] = [
-  {
-    id: 1,
-    text: "What is the capital of France?",
-    category: "Geography",
-  },
-  {
-    id: 2,
-    text: "What is the largest planet in our solar system?",
-    category: "Science",
-  },
-  {
-    id: 3,
-    text: "In what year did World War II end?",
-    category: "History",
-  },
-]
-
 function Room() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answer, setAnswer] = useState("")
@@ -39,7 +15,7 @@ function Room() {
   const [userReady, setUserReady] = useState(false)
   const [totalPlayers, setTotalPlayers] = useState(0)
   const [readyCount, setReadyCount] = useState(0)
-  
+  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null)
   const { roomId, username } = useParams()
 
   useEffect(() => {
@@ -72,6 +48,36 @@ function Room() {
     setUserReady(true)
   })
 
+  socket.on("new-question", (question)=> {
+    console.log("question", question)
+    setCurrentQuestion(question)
+  })
+
+  socket.on("answer-result", ({ username: winner, correct }) => {
+      if (correct) {
+        // setFeedback(`${winner} answered correctly!`);
+        if (winner === username) {
+          setScore((prev) => prev + 1);
+        }
+      }
+    });
+
+    // Listen for personal answer feedback (wrong/too late)
+    socket.on("answer-status", ({ correct, message }) => {
+      if (!correct) {
+        console.log('message', message)
+        // setFeedback(message || "Incorrect answer!");
+      }
+    });
+    socket.on("score-update", ({ updatedScores }) => {
+      console.log('updatedScores', updatedScores)
+      // if (!updatedScores) {
+      //   // setFeedback(message || "Incorrect answer!");
+      // }
+    });
+    
+
+
   socket.on("disconnect", () => {
       console.log("Disconnected")
     })
@@ -84,28 +90,28 @@ function Room() {
     socket.off("connect")
     socket.off("room-joined")
     socket.off("ready-status")
+    socket.off("user-left")
     socket.off("all-ready")
+    socket.off("new-question")
+    socket.off("answer-status")
+    socket.off("answer-result")
+
     socket.off("disconnect")
     socket.off("connect_error")
     socket.disconnect()
   }
 }, [roomId, username])
 
-  const currentQuestion = SAMPLE_QUESTIONS[currentQuestionIndex]
 
   const handleSubmit = () => {
     if (answer.trim()) {
       console.log("[v0] Answer submitted:", answer)
       setSubmitted(true)
+      socket.emit("submit-answer", {roomId, username, answer})
       setScore(score + 1)
-
-      setTimeout(() => {
-        if (currentQuestionIndex < SAMPLE_QUESTIONS.length - 1) {
           setCurrentQuestionIndex(currentQuestionIndex + 1)
           setAnswer("")
           setSubmitted(false)
-        }
-      }, 1500)
     }
   }
 
@@ -115,12 +121,10 @@ function Room() {
     }
   }
 
-  const isGameOver = currentQuestionIndex === SAMPLE_QUESTIONS.length - 1 && submitted
-
   return (
     <div className="container mx-auto flex min-h-screen items-center justify-center px-4 py-8">
       <div className="w-full max-w-2xl">
-        {!userReady ? (
+        {readyCount !== totalPlayers ? (
           <div className="mt-12 text-center">
             <p className="text-sm text-foreground/70">
               {readyCount}/{totalPlayers} players ready
@@ -131,9 +135,9 @@ function Room() {
                 setUserReady(true)
                 socket.emit("player-ready", { roomId, username })
               }}
-              className="mt-8"
+              className={`mt-8 ${userReady?'bg-green-500':''}`}
             >
-              I am ready
+              { userReady?<p>Waiting for others</p>: <p>I am ready</p> }
             </Button>
           </div>
         ) : (
@@ -144,7 +148,6 @@ function Room() {
                 Quiz Battle
               </h1>
               <p className="mt-2 text-sm text-foreground/60">
-                Question {currentQuestionIndex + 1} of {SAMPLE_QUESTIONS.length}
               </p>
             </div>
 
@@ -154,16 +157,12 @@ function Room() {
                 <p className="text-xs uppercase tracking-widest text-foreground/60">Score</p>
                 <p className="mt-2 text-3xl font-mono font-bold text-primary">{score}</p>
               </div>
-              <div className="text-center">
-                <p className="text-xs uppercase tracking-widest text-foreground/60">Category</p>
-                <p className="mt-2 text-lg font-mono text-foreground">{currentQuestion.category}</p>
-              </div>
             </div>
 
             {/* Question Card */}
             <div className="mb-8 rounded-lg border border-border bg-background/40 p-8 backdrop-blur-sm">
               <p className="font-sentient text-2xl font-light leading-relaxed text-foreground md:text-3xl">
-                {currentQuestion.text}
+                {currentQuestion}
               </p>
             </div>
 
@@ -185,35 +184,6 @@ function Room() {
                 {submitted ? "Checking Answer..." : "Submit Answer"}
               </Button>
             </div>
-
-            {/* Feedback */}
-            {submitted && (
-              <div className="mt-8 text-center">
-                <p className="font-mono text-sm text-primary">✓ Answer recorded</p>
-                {!isGameOver && <p className="mt-2 text-xs text-foreground/60">Moving to next question...</p>}
-              </div>
-            )}
-
-            {/* Game Over */}
-            {isGameOver && (
-              <div className="mt-12 text-center">
-                <p className="font-sentient text-2xl font-light text-foreground">Quiz Complete!</p>
-                <p className="mt-4 text-4xl font-mono font-bold text-primary">
-                  {score}/{SAMPLE_QUESTIONS.length}
-                </p>
-                <Button
-                  onClick={() => {
-                    setCurrentQuestionIndex(0)
-                    setAnswer("")
-                    setSubmitted(false)
-                    setScore(0)
-                  }}
-                  className="mt-8"
-                >
-                  Play Again
-                </Button>
-              </div>
-            )}
           </>
         )}
       </div>

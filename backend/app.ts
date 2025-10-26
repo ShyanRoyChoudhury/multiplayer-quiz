@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import dotenv from 'dotenv'
 import cors from 'cors'
 import appRouter from './routes/router'
-import { registerSocketHandlers } from './controller/socket/registerSocketHandlers.js';
+import { registerSocketHandlers } from './controller/socket';
 dotenv.config()
 
 
