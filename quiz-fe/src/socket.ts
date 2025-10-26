@@ -1,5 +1,9 @@
-import { VITE_API_URL } from './config'
+import { VITE_SOCKET_URL } from './config'
 import { io } from 'socket.io-client'
 
 
-export const socket = io(`${VITE_API_URL}/ws`)  
+const SOCKET_URL = `${VITE_SOCKET_URL}`
+console.log("SOCKET_URL", SOCKET_URL)
+export const socket = io(SOCKET_URL, {
+  autoConnect: false, // connect only when you need it
+});

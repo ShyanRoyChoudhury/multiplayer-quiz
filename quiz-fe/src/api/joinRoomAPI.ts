@@ -1,11 +1,10 @@
 import { VITE_API_URL } from "@/config"
 import axios from "axios"
 
-async function createRoomAPI(newRoomName: string, username: string){
+async function joinRoomAPI(roomId: string, username: string){
     try{
-        const response = await axios.post(`${VITE_API_URL}/create-room`, {
-            roomName: newRoomName,
-            username
+        const response = await axios.post(`${VITE_API_URL}/join-room`, {
+            username, roomId
         })
         if(response.status != 200){
             throw new Error("")
@@ -19,4 +18,4 @@ async function createRoomAPI(newRoomName: string, username: string){
     }
 }
 
-export default createRoomAPI
+export default joinRoomAPI

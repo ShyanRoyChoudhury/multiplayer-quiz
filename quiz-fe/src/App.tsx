@@ -31,7 +31,7 @@ function App() {
         <Router>
           <Routes>
             <Route path='/' element={<Dashboard />} />
-            <Route path='/room/:roomId' element={<Room />} />
+            <Route path='/room/:roomId/:username' element={<Room />} />
           </Routes>
         </Router>
       </div>
