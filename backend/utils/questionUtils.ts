@@ -31,7 +31,7 @@ export async function getNextQuestion() {
         }
       ]
     });
-
+    // @ts-ignore
     const response = completion?.choices?.[0]?.message?.content?.trim();
     console.log("Raw response:", response);
 

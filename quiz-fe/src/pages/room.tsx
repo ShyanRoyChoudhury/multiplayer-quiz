@@ -95,7 +95,7 @@ function Room() {
       }
       console.log('leaderboard test', leaderboard)
       setLeaderboard(leaderboard)
-      const userEntry = leaderboard.find((entry) => entry.name === username)
+      const userEntry = leaderboard.find((entry: any) => entry.name === username)
       console.log("userEntry", userEntry)
       if (userEntry) {
         setScore(userEntry.score)
@@ -278,7 +278,7 @@ function Room() {
 
             {/* Leaderboard Table */}
             <div className="mt-10 space-y-3">
-              {leaderboardData.map((entry) => (
+              {leaderboardData.map((entry: any) => (
                 <div
                   key={entry}
                   className="flex items-center justify-between rounded-md border border-border/50 bg-background/20 px-4 py-3 transition-colors hover:bg-background/40"

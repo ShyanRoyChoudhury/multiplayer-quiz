@@ -7,7 +7,6 @@ async function activeRoomsHandler(req: Request, res: Response) {
   try {
     const allKeys = await redisClient.keys("room:*");   // can use scan here instead of keys
     const keys = allKeys.filter((key) => {
-      // Split by ':' and check if there are exactly 2 parts
       const parts = key.split(':');
       return parts.length === 2;
     });
@@ -35,7 +34,6 @@ async function activeRoomsHandler(req: Request, res: Response) {
 
         const data = await redisClient.hGetAll(key);
         
-        // Skip if no data returned
         if (!data || Object.keys(data).length === 0) {
           console.warn(`Skipping key ${key} - no data`);
           continue;
@@ -47,10 +45,10 @@ async function activeRoomsHandler(req: Request, res: Response) {
         });
       } catch (err) {
         console.error(`Error processing key ${key}:`, err);
-        // Continue processing other keys
+        
       }
     }
-
+  // @ts-ignore
     rooms.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 
     return res.status(200).json({

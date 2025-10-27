@@ -12,6 +12,7 @@ export const redisClient = createClient({
     host: redisHost,
     port: redisPort,
     tls: true,
+    // @ts-ignore
     keepAlive: 5000, // Send keepalive every 5 seconds
     reconnectStrategy: (retries: any) => {
       if (retries > 10) {

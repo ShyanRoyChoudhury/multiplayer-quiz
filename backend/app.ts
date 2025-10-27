@@ -3,8 +3,8 @@ import { Server } from 'socket.io'
 import { createServer } from 'node:http'
 import dotenv from 'dotenv'
 import cors from 'cors'
-import appRouter from './routes/router'
-import { registerSocketHandlers } from './controller/socket';
+import appRouter from './routes/router.js'
+import { registerSocketHandlers } from './controller/socket/index.js';
 dotenv.config()
 
 
