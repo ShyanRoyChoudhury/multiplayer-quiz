@@ -4,16 +4,16 @@ import { getNextQuestion } from "../../utils/questionUtils.js";
 
 export function registerQuizHandlers(io: Server, socket: Socket) {
 
-  socket.on("player-ready", async ({ roomId, username }) => {
+  socket.on("player-ready", async ({ roomId, username }, callback) => {
     try {
-      // Mark player as ready in Redis (v4+ syntax)
+      // mark player as ready in Redis
       await redisClient.sAdd(`room:${roomId}:ready`, username);
-
-      // Get total and ready counts
+      await redisClient.expire(`room:${roomId}:ready`, 600);
+      // get total and ready counts
       const totalPlayers = await redisClient.sCard(`room:${roomId}:users`);
       const readyPlayers = await redisClient.sCard(`room:${roomId}:ready`);
 
-      // Emit updated readiness status to everyone
+      // emit updated readiness status to everyone
       io.to(roomId).emit("ready-status", {
         readyPlayers,
         totalPlayers,
@@ -31,9 +31,11 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
         await redisClient.set(`room:${roomId}:currentQuestion`, JSON.stringify(question));
         io.to(roomId).emit("new-question", question.text);
 
-        // Reset the ready set for next round
+        // reset the ready set for next round
         await redisClient.del(`room:${roomId}:ready`);
       }
+
+      return callback?.({ status: "ok" });
     } catch (err) {
       console.error("Error in player-ready:", err);
       socket.emit("error", { message: "Failed to mark ready" });
@@ -48,7 +50,7 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
     await redisClient.del(`room:${roomId}:answered`);
   });
 
-  socket.on("submit-answer", async ({ roomId, username, answer }) => {
+  socket.on("submit-answer", async ({ roomId, username, answer }, callback) => {
   const answeredKey = `room:${roomId}:answered`;
   const currentQuestionKey = `room:${roomId}:currentQuestion`;
   const scoresKey = `room:${roomId}:scores`;
@@ -74,7 +76,7 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
 
     const question = JSON.parse(questionStr);
 
-    if (answer === question.correct) {
+    if (answer.trim().toLowerCase() === question.correct.trim().toLowerCase()) {
       // Begin atomic transaction
       const tx = redisClient.multi();
 
@@ -87,12 +89,31 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
         socket.emit("answer-status", { correct: false, message: "Too late! Someone already answered." });
         return;
       }
+      
+      const users = await redisClient.sMembers(`room:${roomId}:users`);
+let updatedScores = await redisClient.hGetAll(scoresKey);
 
-      // Get updated scores
-      const updatedScores = await redisClient.hGetAll(scoresKey);
-      console.log("updatedScores", updatedScores)
-      io.to(roomId).emit("answer-result", { username, correct: true });
-      io.to(roomId).emit("score-update", {updatedScores});
+// Ensure all users exist in the leaderboard
+for (const user of users) {
+  if (!(user in updatedScores)) {
+    updatedScores[user] = "0";
+    await redisClient.hSet(scoresKey, user, 0);
+    await redisClient.expire(scoresKey, 600);
+  }
+}
+
+// Convert Redis object → sorted array [{ name, score }]
+const leaderboardArray = Object.entries(updatedScores)
+  .map(([name, score]) => ({
+    name,
+    score: parseInt(score, 10),
+  }))
+  .sort((a, b) => b.score - a.score); // highest first
+
+console.log("Leaderboard Array:", leaderboardArray);
+
+io.to(roomId).emit("answer-result", { username, leaderboard: leaderboardArray, correct: true });
+io.to(roomId).emit("leaderboard", { leaderboard: leaderboardArray });
 
 
       // Fetch and send next question
@@ -101,7 +122,7 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
         await redisClient.set(currentQuestionKey, JSON.stringify(nextQuestion));
         await redisClient.del(answeredKey); // clear for next round
 
-        // Optional: small delay before next question
+        // small delay before next question
         setTimeout(() => {
           io.to(roomId).emit("new-question", nextQuestion.text);
           console.log(`Next question sent to room ${roomId}`);
@@ -114,6 +135,8 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
       await redisClient.unwatch();
       socket.emit("answer-status", { correct: false });
     }
+
+    return callback(null, { status: "ok" });
   } catch (err) {
     console.error("Error in submit-answer:", err);
     socket.emit("error", { message: "Failed to process answer" });

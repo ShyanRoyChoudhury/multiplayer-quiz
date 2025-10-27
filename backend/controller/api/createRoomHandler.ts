@@ -17,9 +17,9 @@ async function createRoomHandler(req: Request, res: Response){
             "createdAt", Date.now().toString(),
             "roomName", roomName
         ]);
-
+        await redisClient.expire(`room:${roomId}`, 600);
         await redisClient.sAdd(`room:${roomId}:users`, username);
-
+        await redisClient.expire(`room:${roomId}:users`, 600);      // exprire after 10 min
 
         console.log(`Room created: ${roomId} by ${username}`);
 

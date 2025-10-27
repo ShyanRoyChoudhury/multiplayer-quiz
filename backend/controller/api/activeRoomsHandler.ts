@@ -1,12 +1,17 @@
 import { Request, Response } from "express";
 import { redisClient } from "../../redisClient.js";
 
+
+
 async function activeRoomsHandler(req: Request, res: Response) {
   try {
-    // Get all room metadata keys (exclude ":users" sets)
-    const allKeys = await redisClient.keys("room:*");
-    const keys = allKeys.filter((key) => !key.endsWith(":users"));
-
+    const allKeys = await redisClient.keys("room:*");   // can use scan here instead of keys
+    const keys = allKeys.filter((key) => {
+      // Split by ':' and check if there are exactly 2 parts
+      const parts = key.split(':');
+      return parts.length === 2;
+    });
+    console.log('keys', keys)
     if (!keys.length) {
       return res.status(200).json({
         success: true,
