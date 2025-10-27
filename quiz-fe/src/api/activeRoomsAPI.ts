@@ -1,5 +1,6 @@
 import { VITE_API_URL } from "@/config"
 import axios from "axios"
+import { toast } from "sonner"
 
 async function activeRoomAPI(){
     try{
@@ -10,8 +11,7 @@ async function activeRoomAPI(){
 
         return response.data
     }catch(err){
-        console.log("something went wrong")
-
+        toast.error("something went wrong")
         return null
     }
 }

@@ -8,6 +8,7 @@ import createRoomAPI from "@/api/createRoomAPI"
 import { useNavigate } from "react-router-dom"
 import activeRoomAPI from "@/api/activeRoomsAPI"
 import joinRoomAPI from "@/api/joinRoomAPI"
+import { toast } from "sonner"
 interface Room {
   roomId: string
   roomName: string
@@ -20,9 +21,9 @@ export function Dashboard() {
   ])
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [joinRoomForm, setJoinRoomForm] = useState(false)
-  const [roomId, setRoomId] = useState<string | null>(null)
+  const [roomId, setRoomId] = useState<string>('')
   const [newRoomName, setNewRoomName] = useState("")
-  const [username, setUsername] = useState<string | null>(null)
+  const [username, setUsername] = useState<string>('')
   const navigate = useNavigate();
   
   const getActiveRooms = async() => {
@@ -31,7 +32,7 @@ export function Dashboard() {
   }
   useEffect(()=> {
     getActiveRooms()
-  })
+  }, [])
 
 
   const handleCreateRoom = async() => {
@@ -47,11 +48,11 @@ export function Dashboard() {
                     //   }
                     //   setRooms([...rooms, newRoom])
                 if(!newRoom){
-                    console.log("room creation failed")   
+                    toast.error("room creation failed")   
                 }
                 setNewRoomName("")
                 setShowCreateForm(false)
-                console.log("[v0] Room created:", newRoom)
+                toast.success("Room created:", newRoom)
                 navigate(`/room/${newRoom?.roomId}/${username}`)
             }
         }
@@ -211,25 +212,6 @@ export function Dashboard() {
             </div>
         </div>
 
-        {/* Stats Footer */}
-        <div className="mt-12 pt-8 border-t border-border/30 flex justify-around text-center">
-            <div>
-            <p className="text-2xl font-mono font-bold text-primary">{rooms.length}</p>
-            <p className="text-xs font-mono text-foreground/60 mt-1">Active Rooms</p>
-            </div>
-            <div>
-            <p className="text-2xl font-mono font-bold text-primary">
-                {rooms.reduce((sum, room) => sum + room?.players, 0)}
-            </p>
-            <p className="text-xs font-mono text-foreground/60 mt-1">Players Online</p>
-            </div>
-            <div>
-            <p className="text-2xl font-mono font-bold text-primary">
-                {rooms.reduce((sum, room) => sum + (room?.maxPlayers - room?.players), 0)}
-            </p>
-            <p className="text-xs font-mono text-foreground/60 mt-1">Spots Available</p>
-            </div>
-        </div>
         </div>
     </div>
   )

@@ -12,10 +12,17 @@ export const redisClient = createClient({
     host: redisHost,
     port: redisPort,
     tls: true,
+    keepAlive: 5000, // Send keepalive every 5 seconds
+    reconnectStrategy: (retries) => {
+      if (retries > 10) {
+        return new Error('Too many retries');
+      }
+      return Math.min(retries * 100, 3000); // Exponential backoff
+    }
   },
   password: redisPassword
-})
 
+});
 redisClient.on('error', (err) => console.error('Redis Client Error', err))
 
 await redisClient.connect()
