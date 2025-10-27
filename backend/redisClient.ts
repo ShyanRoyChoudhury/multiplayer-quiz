@@ -15,22 +15,18 @@ export const redisClient = createClient({
     // @ts-ignore
     keepAlive: 5000,
     reconnectStrategy: (retries: number) => {
-      if (retries > 10) {
-        console.log('Redis: Too many reconnection attempts, stopping...');
-        return new Error('Too many retries');
-      }
+      // Infinite retries with exponential backoff
       const delay = Math.min(retries * 100, 3000);
       console.log(`Redis: Reconnecting... attempt ${retries}, delay ${delay}ms`);
       return delay;
     },
-    connectTimeout: 10000, // 10 second timeout
+    connectTimeout: 10000,
   },
   password: redisPassword,
-  // Disable offline queue to prevent command buildup
   disableOfflineQueue: false,
 });
 
-// Better error handling
+// Error handling
 redisClient.on('error', (err: Error) => {
   console.error('Redis Client Error:', err.message);
 });
@@ -51,23 +47,44 @@ redisClient.on('end', () => {
   console.log('Redis: Connection closed');
 });
 
-// Connect with error handling
-try {
-  await redisClient.connect();
-  console.log('Redis: Initial connection established');
-} catch (err) {
-  console.error('Redis: Failed to connect:', err);
+// Connection state management
+let isConnecting = false;
+let isConnected = false;
+
+export async function connectRedis() {
+  if (isConnected || isConnecting) {
+    return redisClient;
+  }
+  
+  isConnecting = true;
+  
+  try {
+    await redisClient.connect();
+    isConnected = true;
+    isConnecting = false;
+    console.log('Redis: Initial connection established');
+    return redisClient;
+  } catch (err) {
+    isConnecting = false;
+    console.error('Redis: Failed to connect:', err);
+    // Don't throw - let it retry via reconnectStrategy
+    console.log('Redis: Will retry connection automatically...');
+  }
 }
 
 // Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Redis: Closing connection...');
-  await redisClient.quit();
+const shutdown = async () => {
+  if (isConnected) {
+    console.log('Redis: Closing connection...');
+    try {
+      await redisClient.quit();
+    } catch (err) {
+      console.error('Redis: Error during shutdown:', err);
+      await redisClient.disconnect();
+    }
+  }
   process.exit(0);
-});
+};
 
-process.on('SIGTERM', async () => {
-  console.log('Redis: Closing connection...');
-  await redisClient.quit();
-  process.exit(0);
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

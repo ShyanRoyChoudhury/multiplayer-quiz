@@ -4,10 +4,10 @@ import { createServer } from 'node:http'
 import dotenv from 'dotenv'
 import cors from 'cors'
 import appRouter from './routes/router.js'
-import { registerSocketHandlers } from './controller/socket/index.js';
+import { registerSocketHandlers } from './controller/socket/index.js'
+import { connectRedis } from './redisClient.js'
+
 dotenv.config()
-
-
 
 const app = express()
 
@@ -38,8 +38,9 @@ app.get('/health', (req, res) => {
 
 app.use('/api', appRouter)
 
+// Start server immediately (for health checks)
 server.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`)
+  
+  connectRedis();
 })
-
-
