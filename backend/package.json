@@ -8,6 +8,7 @@
     "dev": "nodemon --exec tsx app.ts",
     "build": "tsc -b"
   },
+  "homepage": "/",
   "author": "Shyan Roy Choudhury",
   "license": "ISC",
   "description": "",
