@@ -42,6 +42,67 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
     }
   });
 
+  // check if user is already ready when they join/rejoin
+  socket.on("check-ready-status", async ({ roomId, username }, callback) => {
+    try {
+      const isReady = await redisClient.sIsMember(`room:${roomId}:ready`, username);
+      const totalPlayers = await redisClient.sCard(`room:${roomId}:users`);
+      const readyPlayers = await redisClient.sCard(`room:${roomId}:ready`);
+      const currentQuestionStr = await redisClient.get(`room:${roomId}:currentQuestion`);
+      const quizStarted = currentQuestionStr !== null;
+      
+      let currentQuestion = null;
+      if (currentQuestionStr) {
+        const questionData = JSON.parse(currentQuestionStr);
+        currentQuestion = questionData.text;
+      }
+
+      // Get current score
+      const scoresKey = `room:${roomId}:scores`;
+      const userScore = await redisClient.hGet(scoresKey, username);
+      const score = userScore ? parseInt(userScore, 10) : 0;
+
+      // Get current leaderboard
+      const users = await redisClient.sMembers(`room:${roomId}:users`);
+      let updatedScores = await redisClient.hGetAll(scoresKey);
+      
+      // Ensure all users exist in the leaderboard
+      for (const user of users) {
+        if (!(user in updatedScores)) {
+          updatedScores[user] = "0";
+        }
+      }
+      
+      const leaderboardArray = Object.entries(updatedScores)
+        .map(([name, score]) => ({
+          name,
+          score: parseInt(score as string, 10),
+        }))
+        .sort((a, b) => b.score - a.score);
+
+      return callback?.({ 
+        isReady,
+        readyPlayers,
+        totalPlayers,
+        quizStarted,
+        currentQuestion,
+        score,
+        leaderboard: leaderboardArray
+      });
+    } catch (err) {
+      console.error("Error checking ready status:", err);
+      return callback?.({ 
+        isReady: false, 
+        readyPlayers: 0, 
+        totalPlayers: 0, 
+        quizStarted: false,
+        currentQuestion: null,
+        score: 0,
+        leaderboard: []
+      });
+    }
+  });
+
   socket.on("start-quiz", async ({ roomId }) => {
     const question = await getNextQuestion();
     io.to(roomId).emit("new-question", question.text);
@@ -51,96 +112,95 @@ export function registerQuizHandlers(io: Server, socket: Socket) {
   });
 
   socket.on("submit-answer", async ({ roomId, username, answer }, callback) => {
-  const answeredKey = `room:${roomId}:answered`;
-  const currentQuestionKey = `room:${roomId}:currentQuestion`;
-  const scoresKey = `room:${roomId}:scores`;
+    const answeredKey = `room:${roomId}:answered`;
+    const currentQuestionKey = `room:${roomId}:currentQuestion`;
+    const scoresKey = `room:${roomId}:scores`;
 
-  try {
-    // Watch the answered key to detect concurrent modifications
-    await redisClient.watch(answeredKey);
+    try {
+      // Watch the answered key to detect concurrent modifications
+      await redisClient.watch(answeredKey);
 
-    const answered = await redisClient.get(answeredKey);
-    if (answered) {
-      // Someone already answered
-      await redisClient.unwatch();
-      socket.emit("answer-status", { correct: false, message: "Too late! Someone already answered." });
-      return;
-    }
-
-    const questionStr = await redisClient.get(currentQuestionKey);
-    if (!questionStr) {
-      await redisClient.unwatch();
-      socket.emit("error", { message: "No active question found" });
-      return;
-    }
-
-    const question = JSON.parse(questionStr);
-
-    if (answer.trim().toLowerCase() === question.correct.trim().toLowerCase()) {
-      // Begin atomic transaction
-      const tx = redisClient.multi();
-
-      tx.set(answeredKey, username);
-      tx.hIncrBy(scoresKey, username, 1);
-
-      const results = await tx.exec(); // commit transaction
-      if (!results) {
-        // Another client modified the key -> race condition occurred
+      const answered = await redisClient.get(answeredKey);
+      if (answered) {
+        // Someone already answered
+        await redisClient.unwatch();
         socket.emit("answer-status", { correct: false, message: "Too late! Someone already answered." });
         return;
       }
-      
-      const users = await redisClient.sMembers(`room:${roomId}:users`);
-let updatedScores = await redisClient.hGetAll(scoresKey);
 
-// Ensure all users exist in the leaderboard
-for (const user of users) {
-  if (!(user in updatedScores)) {
-    updatedScores[user] = "0";
-    await redisClient.hSet(scoresKey, user, 0);
-    await redisClient.expire(scoresKey, 600);
-  }
-}
-
-// Convert Redis object → sorted array [{ name, score }]
-const leaderboardArray = Object.entries(updatedScores)
-  .map(([name, score]) => ({
-    name,
-    score: parseInt(score, 10),
-  }))
-  .sort((a, b) => b.score - a.score); // highest first
-
-console.log("Leaderboard Array:", leaderboardArray);
-
-io.to(roomId).emit("answer-result", { username, leaderboard: leaderboardArray, correct: true });
-io.to(roomId).emit("leaderboard", { leaderboard: leaderboardArray });
-
-
-      // Fetch and send next question
-      const nextQuestion = await getNextQuestion();
-      if (nextQuestion) {
-        await redisClient.set(currentQuestionKey, JSON.stringify(nextQuestion));
-        await redisClient.del(answeredKey); // clear for next round
-
-        // small delay before next question
-        setTimeout(() => {
-          io.to(roomId).emit("new-question", nextQuestion.text);
-          console.log(`Next question sent to room ${roomId}`);
-        }, 2000); // wait 2s before next question
-      } else {
-        io.to(roomId).emit("quiz-complete");
-        console.log(`Quiz complete for room ${roomId}`);
+      const questionStr = await redisClient.get(currentQuestionKey);
+      if (!questionStr) {
+        await redisClient.unwatch();
+        socket.emit("error", { message: "No active question found" });
+        return;
       }
-    } else {
-      await redisClient.unwatch();
-      socket.emit("answer-status", { correct: false });
-    }
 
-    return callback(null, { status: "ok" });
-  } catch (err) {
-    console.error("Error in submit-answer:", err);
-    socket.emit("error", { message: "Failed to process answer" });
-  }
-});
+      const question = JSON.parse(questionStr);
+
+      if (answer.trim().toLowerCase() === question.correct.trim().toLowerCase()) {
+        // Begin atomic transaction
+        const tx = redisClient.multi();
+
+        tx.set(answeredKey, username);
+        tx.hIncrBy(scoresKey, username, 1);
+
+        const results = await tx.exec(); // commit transaction
+        if (!results) {
+          // Another client modified the key -> race condition occurred
+          socket.emit("answer-status", { correct: false, message: "Too late! Someone already answered." });
+          return;
+        }
+        
+        const users = await redisClient.sMembers(`room:${roomId}:users`);
+        let updatedScores = await redisClient.hGetAll(scoresKey);
+
+        // Ensure all users exist in the leaderboard
+        for (const user of users) {
+          if (!(user in updatedScores)) {
+            updatedScores[user] = "0";
+            await redisClient.hSet(scoresKey, user, 0);
+            await redisClient.expire(scoresKey, 600);
+          }
+        }
+
+        // Convert Redis object → sorted array [{ name, score }]
+        const leaderboardArray = Object.entries(updatedScores)
+          .map(([name, score]) => ({
+            name,
+            score: parseInt(score, 10),
+          }))
+          .sort((a, b) => b.score - a.score); // highest first
+
+        console.log("Leaderboard Array:", leaderboardArray);
+
+        io.to(roomId).emit("answer-result", { username, leaderboard: leaderboardArray, correct: true });
+        io.to(roomId).emit("leaderboard", { leaderboard: leaderboardArray });
+
+        // Fetch and send next question
+        const nextQuestion = await getNextQuestion();
+        if (nextQuestion) {
+          await redisClient.set(currentQuestionKey, JSON.stringify(nextQuestion));
+          await redisClient.del(answeredKey); // clear for next round
+
+          // small delay before next question
+          setTimeout(() => {
+            io.to(roomId).emit("new-question", nextQuestion.text);
+            console.log(`Next question sent to room ${roomId}`);
+          }, 2000); // wait 2s before next question
+        } else {
+          io.to(roomId).emit("quiz-complete");
+          console.log(`Quiz complete for room ${roomId}`);
+        }
+      } else {
+        await redisClient.unwatch();
+        socket.emit("answer-status", { correct: false });
+      }
+
+      return callback(null, { status: "ok" });
+    } catch (err) {
+      console.error("Error in submit-answer:", err);
+      socket.emit("error", { message: "Failed to process answer" });
+    }
+  });
 
 }

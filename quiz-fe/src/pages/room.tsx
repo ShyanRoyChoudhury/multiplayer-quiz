@@ -17,6 +17,7 @@ function Room() {
   const [totalPlayers, setTotalPlayers] = useState(0)
   const [readyCount, setReadyCount] = useState(0)
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null)
+  const [quizStarted, setQuizStarted] = useState(false)
   const { roomId, username } = useParams()
   const [connectionStatus, setConnectionStatus] = useState("connecting"); 
   const [leaderboardData, setLeaderboard] = useState([])
@@ -27,6 +28,32 @@ function Room() {
       console.log("Socket connected, joining room...")
       setConnectionStatus("connected");
       socket.emit("join-room", { roomId, username })
+      
+      // Check if user was already ready before refresh
+      socket.emit("check-ready-status", { roomId, username }, (response: any) => {
+        if (response) {
+          console.log("Received status:", response)
+          setUserReady(response.isReady)
+          setReadyCount(response.readyPlayers)
+          setTotalPlayers(response.totalPlayers)
+          setQuizStarted(response.quizStarted)
+          
+          // Restore current question if quiz has started
+          if (response.currentQuestion) {
+            setCurrentQuestion(response.currentQuestion)
+          }
+          
+          // Restore score
+          if (response.score !== undefined) {
+            setScore(response.score)
+          }
+          
+          // Restore leaderboard
+          if (response.leaderboard && Array.isArray(response.leaderboard)) {
+            setLeaderboard(response.leaderboard)
+          }
+        }
+      })
     })
     
     socket.on("room-joined", (msg) => {
@@ -50,11 +77,13 @@ function Room() {
     socket.on("all-ready", () => {
       toast("All players ready! Starting quiz...")
       setUserReady(true)
+      setQuizStarted(true)
     })
     
     socket.on("new-question", (question)=> {
       console.log("question", question)
       setCurrentQuestion(question)
+      setQuizStarted(true)
     })
     
     socket.on("answer-result", ({ username: winner, leaderboard, correct }) => {
@@ -105,6 +134,16 @@ function Room() {
       console.log("Reconnected after", attemptNumber, "attempts");
       setConnectionStatus("connected");
       socket.emit("join-room", { roomId, username }); // rejoin room after reconnect
+      
+      // recheck ready status after reconnect
+      socket.emit("check-ready-status", { roomId, username }, (response: any) => {
+        if (response) {
+          setUserReady(response.isReady)
+          setReadyCount(response.readyPlayers)
+          setTotalPlayers(response.totalPlayers)
+          setQuizStarted(response.quizStarted)
+        }
+      })
     });
 
     
@@ -125,6 +164,7 @@ function Room() {
     socket.off("answer-result")
     socket.off("leaderboard")
     socket.off("disconnect")
+    socket.off("reconnect")
     socket.off("connect_error")
     socket.disconnect()
   }
@@ -160,7 +200,7 @@ function Room() {
   return (
     <div className="container mx-auto flex min-h-screen items-center justify-center px-4 py-8">
       <div className="w-full max-w-2xl">
-        {readyCount !== totalPlayers ? (
+        {!quizStarted ? (
           <div className="mt-12 text-center">
             <p className="text-sm text-foreground/70">
               {readyCount}/{totalPlayers} players ready
@@ -171,6 +211,7 @@ function Room() {
                 setUserReady(true)
                 socket.emit("player-ready", { roomId, username })
               }}
+              disabled={userReady}
               className={`mt-8 ${userReady?'bg-green-500':''}`}
             >
               { userReady?<p>Waiting for others</p>: <p>I am ready</p> }
